@@ -188,6 +188,18 @@ func (pep *PEP) CheckPermission(operationType string, ctx context.Context, typeL
 	authorized := true
 	errorDescription := ""
 	for typeName := range typeList {
+		// skip over any of the standard types that start with __
+		if strings.HasPrefix(typeName, "__") {
+			continue
+		}
+		// Ignore built-in type names
+		switch typeName {
+		case
+			"Point",
+			"Polygon",
+			"MultiPolygon":
+			continue
+		}
 		if _, ok := scopes[typeName+":"+operationType]; !ok {
 			authorized = false
 			errorDescription = errorDescription + " unauthorized type " + typeName
@@ -273,6 +285,14 @@ type CustomClaims struct {
 			Scopes []string `json:"scopes"`
 		} `json:"permissions"`
 	} `json:"authorization"`
+	RealmAccess struct {
+		Roles []string `json:"roles"`
+	} `json:"realm_access"`
+	ResourceAccess struct {
+		LibreBaas struct {
+			Roles []string `json:"roles"`
+		} `json:"libreBaas"`
+	} `json:"resource_access"`
 	jwt.StandardClaims
 	Name  string `json:"name"`
 	Email string `json:"email"`
@@ -306,6 +326,13 @@ func (pep *PEP) ExtractAuthVariablesFromClaims(claims *CustomClaims) map[string]
 
 	customClaims["name"] = claims.Name
 	customClaims["email"] = claims.Email
+	// add the jwt standard claims
+	customClaims["sub"] = claims.Subject
+	customClaims["exp"] = claims.ExpiresAt
+	customClaims["iat"] = claims.IssuedAt
+	customClaims["iss"] = claims.Issuer
+	customClaims["nbf"] = claims.NotBefore
+	// map the permissions claim from the token
 	if len(claims.AuthVariables.Permissions) > 0 {
 		for _, permission := range claims.AuthVariables.Permissions {
 			if len(permission.Scopes) > 0 {
@@ -314,6 +341,14 @@ func (pep *PEP) ExtractAuthVariablesFromClaims(claims *CustomClaims) map[string]
 				}
 			}
 		}
+	}
+	// map the realm_access roles from the token
+	if len(claims.RealmAccess.Roles) > 0 {
+		customClaims["realm_access.roles"] = strings.Join(claims.RealmAccess.Roles, ",")
+	}
+	// map the resource_access roles for the libreBaas client from the token if it exists
+	if len(claims.ResourceAccess.LibreBaas.Roles) > 0 {
+		customClaims["resource_access.libreBaas.roles"] = strings.Join(claims.ResourceAccess.LibreBaas.Roles, ",")
 	}
 
 	return customClaims
@@ -456,7 +491,15 @@ func (pep *PEP) UpdateAuthResourceDefinition(ctx context.Context, schema *schema
 		resourceDefinition.ResourceScopes = append(resourceDefinition.ResourceScopes, strings.Trim(update.TypeName, "\000")+":query")
 		resourceDefinition.ResourceScopes = append(resourceDefinition.ResourceScopes, strings.Trim(update.TypeName, "\000")+":mutation")
 		resourceDefinition.ResourceScopes = append(resourceDefinition.ResourceScopes, strings.Trim(update.TypeName, "\000")+":subscription")
+		resourceDefinition.ResourceScopes = append(resourceDefinition.ResourceScopes, strings.Trim(update.TypeName, "\000")+":delete")
 	}
+	resourceDefinition.ResourceScopes = append(resourceDefinition.ResourceScopes, "GQLSchema:query")
+	resourceDefinition.ResourceScopes = append(resourceDefinition.ResourceScopes, "NodeState:query")
+	resourceDefinition.ResourceScopes = append(resourceDefinition.ResourceScopes, "MembershipState:query")
+	resourceDefinition.ResourceScopes = append(resourceDefinition.ResourceScopes, "ClusterGroup:query")
+	resourceDefinition.ResourceScopes = append(resourceDefinition.ResourceScopes, "Member:query")
+	resourceDefinition.ResourceScopes = append(resourceDefinition.ResourceScopes, "Tablet:query")
+	resourceDefinition.ResourceScopes = append(resourceDefinition.ResourceScopes, "License:query")
 	jsonBody, err := json.Marshal(resourceDefinition)
 	if err != nil {
 		return err
