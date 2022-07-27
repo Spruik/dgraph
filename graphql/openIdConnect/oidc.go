@@ -489,6 +489,7 @@ func (pep *PEP) UpdateAuthResourceDefinition(ctx context.Context, schema *schema
 	resourceDefinition := ResourceDefinition{Name: "graphql"}
 	for _, update := range schema.Types {
 		resourceDefinition.ResourceScopes = append(resourceDefinition.ResourceScopes, strings.Trim(update.TypeName, "\000")+":query")
+		resourceDefinition.ResourceScopes = append(resourceDefinition.ResourceScopes, strings.Trim(update.TypeName, "\000")+"AggregateResult:query")
 		resourceDefinition.ResourceScopes = append(resourceDefinition.ResourceScopes, strings.Trim(update.TypeName, "\000")+":mutation")
 		resourceDefinition.ResourceScopes = append(resourceDefinition.ResourceScopes, strings.Trim(update.TypeName, "\000")+":subscription")
 		resourceDefinition.ResourceScopes = append(resourceDefinition.ResourceScopes, strings.Trim(update.TypeName, "\000")+":delete")
